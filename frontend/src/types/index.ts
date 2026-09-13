@@ -7,8 +7,6 @@ export interface Book {
   pages: number
   description: string
   locationId: number
-  coverColor: string
-  coverInk: string
 }
 
 export interface PickupLocation {

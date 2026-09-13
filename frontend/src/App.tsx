@@ -54,7 +54,11 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
-      <footer className="site-footer"><div className="container footer-inner"><span className="footer-brand">BookSwap.</span><span>Книги объединяют.</span><span className="demo-note">Демоверсия · изменения сбрасываются при обновлении страницы</span></div></footer>
+      <footer className="site-footer">
+        <div className="container footer-inner">
+          <span className="footer-brand">BookSwap.</span>
+        </div>
+      </footer>
       <Snackbar open={Boolean(notice)} autoHideDuration={4500} onClose={() => setNotice('')}><Alert severity="success" onClose={() => setNotice('')}>{notice}</Alert></Snackbar>
     </>
   )
