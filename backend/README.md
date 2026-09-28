@@ -39,22 +39,27 @@ backend/
 операции с БД — в `crud.py`.
 `main.py` собирает приложение из этих частей.
 
-## Запуск
+## Настройка и первый запуск
+
+Команды ниже рассчитаны на Bash в Linux. Начните в корне проекта.
+
+### 1. Проверить необходимые инструменты
 
 Нужен Python 3.10 или новее с модулями `venv` и `pip`, а также Docker
 с командой `docker compose`. Установка Docker для Ubuntu описана
 в [официальной инструкции](https://docs.docker.com/engine/install/ubuntu/).
 Отдельно устанавливать PostgreSQL на компьютер не нужно.
 
-Проверить Docker:
-
 ```bash
+python3 --version
 docker --version
 docker compose version
 docker info
 ```
 
-Подготовить окружение из корня проекта:
+Docker должен быть запущен, а `docker info` — выполняться без ошибки.
+
+### 2. Создать виртуальное окружение и установить зависимости
 
 ```bash
 cd backend
@@ -62,6 +67,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
+
+Дальнейшие команды выполняются из `backend` с активным `.venv`.
+
+### 3. Подготовить настройки окружения
 
 При первом запуске скопируйте `.env.example` в `.env`, если `.env` ещё нет:
 
@@ -72,23 +81,52 @@ cp .env.example .env
 В `.env` заполните `DB_PASSWORD` своим паролем. Остальные значения подходят
 для локального запуска. Пароль обязателен: с пустым значением контейнер
 и backend не запустятся. Готовый `.env` повторно копировать не нужно.
+В примере `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_NAME=bookswap`,
+`DB_USER=bookswap`. Один `.env` используется контейнером БД и backend.
+Файл с настоящим паролем исключён из Git.
 
-Из папки `backend` запустите базу и проверьте подключение:
+### 4. Подготовить PostgreSQL
 
 ```bash
 docker compose up -d --wait
-python -m app.check_db
-python -m app.init_db
-python -m uvicorn app.main:app --reload
+docker compose ps
 ```
 
 При первом запуске Docker скачает образ PostgreSQL 17 и создаст пользователя
-и базу из `.env`. `--wait` дожидается готовности сервера.
-Команда проверки должна вывести:
+и базу из `.env`. `--wait` дожидается готовности сервера. В выводе `ps`
+у сервиса `db` должен быть статус `healthy`. Создавать пользователя
+и пустую базу вручную не требуется.
+
+Проверьте подключение именно из Python через SQLAlchemy:
+
+```bash
+python -m app.check_db
+```
+
+Ожидаемый результат:
 
 ```text
 Подключение к PostgreSQL работает: SELECT 1 = 1
 ```
+
+### 5. Создать таблицы
+
+```bash
+python -m app.init_db
+```
+
+Будут созданы `users`, `pickup_locations`, `books`, `reservations`
+с первичными и внешними ключами. Повторный запуск сохраняет существующие
+данные, но не изменяет структуру уже созданных таблиц.
+Демонстрационные записи автоматически не загружаются.
+
+### 6. Запустить backend и проверить API
+
+```bash
+python -m uvicorn app.main:app --reload
+```
+
+Оставьте этот терминал открытым. Для остановки backend нажмите `Ctrl+C`.
 
 - Проверка работы: http://127.0.0.1:8000/api/health
 - Документация Swagger UI: http://127.0.0.1:8000/docs
@@ -96,6 +134,39 @@ python -m uvicorn app.main:app --reload
 Запрос `GET /api/health` возвращает `{"status":"ok"}`.
 Этот маршрут проверяет только доступность API. Для проверки БД используется
 `python -m app.check_db`. Заполненный `.env` нужен для обоих вариантов.
+
+В Swagger (`/docs`) записи удобно создавать в порядке: пользователь,
+пункт выдачи, книга с `location_id`, бронирование с `user_id` и `book_id`.
+Используйте идентификаторы из ответов API.
+
+### 7. Запустить автоматические проверки
+
+В другом терминале из корня проекта:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
+
+PostgreSQL должна работать, таблицы должны быть созданы. Отдельно запущенный
+Uvicorn тестам не нужен: они вызывают приложение через `TestClient`.
+Описание проверок и очистки тестовых данных находится в разделе «Проверка API».
+
+## Повторный запуск
+
+После первоначальной настройки из корня проекта:
+
+```bash
+cd backend
+source .venv/bin/activate
+docker compose up -d --wait
+python -m uvicorn app.main:app --reload
+```
+
+Заново создавать `.env`, виртуальное окружение и таблицы не требуется.
+При обновлении зависимостей выполните `python -m pip install -r requirements.txt`.
 
 ## Настройки и БД
 

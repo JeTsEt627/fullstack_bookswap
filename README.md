@@ -53,6 +53,51 @@ npm run dev
 Проверка кода: `npm run lint`. Проверка TypeScript и сборка: `npm run build`.
 Команды выполняются из папки `frontend`.
 
+## Настройка и запуск backend
+
+Нужны Python 3.10+ с `venv` и `pip`, запущенный Docker и Docker Compose.
+PostgreSQL работает в контейнере, FastAPI запускается на компьютере.
+Команды выполняются в Bash из корня проекта.
+
+1. Создайте виртуальное окружение и установите зависимости:
+
+   ```bash
+   cd backend
+   python3 -m venv .venv
+   source .venv/bin/activate
+   python -m pip install -r requirements.txt
+   ```
+
+2. Если `.env` ещё нет, скопируйте пример и заполните `DB_PASSWORD` своим
+   паролем. Существующий `.env` сохраняйте; файл с паролем не входит в Git.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Подготовьте БД и создайте таблицы:
+
+   ```bash
+   docker compose up -d --wait
+   python -m app.check_db
+   python -m app.init_db
+   ```
+
+   Контейнер создаёт пользователя и базу из `.env`. Команда `init_db` создаёт
+   таблицы пользователей, пунктов выдачи, книг и бронирований.
+
+4. Запустите backend:
+
+   ```bash
+   python -m uvicorn app.main:app --reload
+   ```
+
+   Проверка API: http://127.0.0.1:8000/api/health — ответ `{"status":"ok"}`.
+   Swagger: http://127.0.0.1:8000/docs.
+
+Подробные шаги, повторный запуск, остановка и тесты описаны
+в [backend/README.md](backend/README.md#настройка-и-первый-запуск).
+
 ## Текущее состояние
 
 Реализованы пять экранов на React + TypeScript с клиентской маршрутизацией
