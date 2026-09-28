@@ -5,11 +5,13 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.database import engine, get_db
 from app.main import app
+from app.models import Book, PickupLocation, Reservation, User
 
 
 class ApiTests(unittest.TestCase):
@@ -136,6 +138,43 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "Книга уже забронирована или выдана.")
         response = self.client.get(f"/api/books/{book['id']}")
         self.assertEqual(response.status_code, 200)
+
+    def test_relationships_loaded_from_database(self):
+        user, location, book = self.fixtures()
+        reservation = self.create("reservations", self.reservation_data(user, book))
+        self.session.expunge_all()
+        stored = self.session.get(Reservation, reservation["id"])
+        self.assertEqual(stored.user.id, user["id"])
+        self.assertEqual(stored.book.id, book["id"])
+        self.assertEqual(stored.book.location.id, location["id"])
+        self.assertIn(stored, stored.user.reservations)
+        self.assertIn(stored, stored.book.reservations)
+        self.assertIn(stored.book, stored.book.location.books)
+
+    def test_history_does_not_prevent_new_reservation(self):
+        user, _, book = self.fixtures()
+        data = self.reservation_data(user, book)
+        for status in ("returned", "cancelled", "reserved"):
+            self.create("reservations", {**data, "status": status})
+        response = self.client.post("/api/reservations", json={**data, "status": "borrowed"})
+        self.assertEqual(response.status_code, 409)
+        stored = self.session.scalars(
+            select(Reservation).where(Reservation.book_id == book["id"])
+        ).all()
+        self.assertCountEqual([row.status for row in stored], ["returned", "cancelled", "reserved"])
+
+    def test_database_restricts_deletion_of_related_records(self):
+        user, location, book = self.fixtures()
+        reservation = self.create("reservations", self.reservation_data(user, book))
+        # DELETE-маршрутов пока нет: проверяем защиту внешними ключами напрямую.
+        for model, record in ((User, user), (PickupLocation, location), (Book, book)):
+            with self.subTest(table=model.__tablename__):
+                with self.assertRaises(IntegrityError) as error:
+                    with self.session.begin_nested():
+                        self.session.execute(delete(model).where(model.id == record["id"]))
+                self.assertEqual(error.exception.orig.sqlstate, "23503")
+                self.assertIsNotNone(self.session.get(model, record["id"]))
+        self.assertIsNotNone(self.session.get(Reservation, reservation["id"]))
 
     def test_routing_json_and_openapi(self):
         self.assertEqual(self.client.get("/api/unknown").status_code, 404)
